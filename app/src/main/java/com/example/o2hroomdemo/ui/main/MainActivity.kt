@@ -1,27 +1,35 @@
 package com.example.o2hroomdemo.ui.main
 
+import android.app.ProgressDialog
 import android.content.Context
 import android.content.Intent
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
+import android.os.AsyncTask
 import android.os.Bundle
+import android.os.Environment
 import android.util.Log
 import android.view.View
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.databinding.DataBindingUtil
+import androidx.recyclerview.widget.GridLayoutManager
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.example.o2hroomdemo.Model.UserDetails_RoomTable
 import com.example.o2hroomdemo.R
+import com.example.o2hroomdemo.Utils.MyProgressDialog
 import com.example.o2hroomdemo.databinding.ActivityMainBinding
 import com.example.o2hroomdemo.ui.login.LoginActivity
+import com.example.o2hroomdemo.utils.SessionManager
 import com.google.firebase.auth.ktx.auth
 import com.google.firebase.ktx.Firebase
 import org.json.JSONArray
 import org.json.JSONException
-import java.io.BufferedReader
-import java.io.IOException
-import java.io.InputStream
-import java.io.InputStreamReader
+import java.io.*
+import java.net.URL
+import java.text.SimpleDateFormat
+import java.util.*
 import kotlin.collections.ArrayList
 
 
@@ -40,7 +48,7 @@ class MainActivity : AppCompatActivity() {
 
         mContext = MainActivity@ this
 
-        bindingMain.tvNameAM.setText(com.example.o2hroomdemo.utils.SessionManager.getUserName(mContext))
+        bindingMain.tvNameAM.setText(SessionManager.getUserName(mContext))
 
         addItemsFromJSON()
         setGalleryData()
@@ -53,9 +61,8 @@ class MainActivity : AppCompatActivity() {
         layoutManager = LinearLayoutManager(this)
         bindingMain.rcVwGallaryPicAM.setLayoutManager(layoutManager)
         mAdapter = GallaryAdapter(this, viewItems)
+        bindingMain.rcVwGallaryPicAM.setLayoutManager(GridLayoutManager(this, 2))
         bindingMain.rcVwGallaryPicAM.setAdapter(mAdapter)
-
-
     }
 
 
@@ -70,6 +77,8 @@ class MainActivity : AppCompatActivity() {
                 val profile = itemObj.getString("profile")
                 val holidays = UserDetails_RoomTable(id!!.toInt(), profile_id, profile)
                 viewItems.add(holidays)
+
+                DownloadImage(mContext).execute(profile)
             }
         } catch (e: JSONException) {
             Log.d(TAG, "addItemsFromJSON: ", e)
@@ -77,6 +86,84 @@ class MainActivity : AppCompatActivity() {
             Log.d(TAG, "addItemsFromJSON: ", e)
         }
     }
+
+    private class DownloadImage(var mContext: Context) :
+        AsyncTask<String?, Void?, Bitmap?>() {
+
+        private val TAG = "DownloadImage"
+        var imageName: String? = ""
+
+        lateinit var pDialog: ProgressDialog
+
+
+        protected override fun onPreExecute() {
+            pDialog =  ProgressDialog(mContext)
+            pDialog.setCancelable(false)
+            pDialog.setTitle("Please wait...")
+            pDialog.show()
+        }
+
+        private fun downloadImageBitmap(sUrl: String): Bitmap? {
+            imageName = sUrl.substring(sUrl.lastIndexOf('/') + 1)
+            var bitmap: Bitmap? = null
+            try {
+                val inputStream: InputStream = URL(sUrl).openStream() // Download Image from URL
+                bitmap = BitmapFactory.decodeStream(inputStream) // Decode Bitmap
+                inputStream.close()
+            } catch (e: java.lang.Exception) {
+                Log.d(TAG, "Exception 1, Something went wrong!")
+                e.printStackTrace()
+            }
+            return bitmap
+        }
+
+        override fun onPostExecute(result: Bitmap?) {
+            saveImage(mContext, result!!, imageName)
+            if( null != pDialog)
+                pDialog.dismiss();
+        }
+
+        override fun doInBackground(vararg params: String?): Bitmap? {
+            return downloadImageBitmap(params[0]!!)
+        }
+
+        fun saveImage(
+            context: Context,
+            b: Bitmap,
+            fileImageName: String?
+        ) {
+            var dirName: String = "/ohRoomData"
+            // val timeStamp: String = SimpleDateFormat("ddMMyyyy_HHmmss").format(Date())
+            //val fileName = "fav$timeStamp.JPG"
+
+
+            val direct = File(Environment.getExternalStorageDirectory().toString() + dirName)
+
+            if (!direct.exists()) {
+                val wallpaperDirectory =
+                    File(Environment.getExternalStorageDirectory().toString() + dirName)
+                wallpaperDirectory.mkdirs()
+            }
+
+            val file = File(File(Environment.getExternalStorageDirectory().toString() + dirName), fileImageName)
+            if (file.exists()) {
+                file.delete()
+            }
+
+
+            val foStream: FileOutputStream
+            try {
+                foStream = context.openFileOutput(imageName, Context.MODE_PRIVATE)
+                b.compress(Bitmap.CompressFormat.PNG, 100, foStream)
+                foStream.close()
+            } catch (e: java.lang.Exception) {
+                Log.d("saveImage", "Exception 2, Something went wrong!")
+                e.printStackTrace()
+            }
+
+        }
+    }
+
 
     @Throws(IOException::class)
     private fun readJSONDataFromFile(): String {
@@ -109,7 +196,7 @@ class MainActivity : AppCompatActivity() {
             .setMessage(message)
             .setPositiveButton("Yes", { dialog, whichButton ->
                 try {
-                    com.example.o2hroomdemo.utils.SessionManager.clearAppSession(mContext)
+                    SessionManager.clearAppSession(mContext)
                     val mainActivity = Intent(mContext, LoginActivity::class.java)
                     mainActivity.flags =
                         Intent.FLAG_ACTIVITY_CLEAR_TASK or Intent.FLAG_ACTIVITY_NEW_TASK

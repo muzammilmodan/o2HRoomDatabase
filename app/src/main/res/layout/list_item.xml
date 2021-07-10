@@ -17,7 +17,7 @@
             android:id="@+id/imageVw"
             android:layout_width="match_parent"
             android:layout_height="@dimen/_80sdp"
-            android:background="@color/black" />
+            android:scaleType="fitXY" />
 
 
     </LinearLayout>
