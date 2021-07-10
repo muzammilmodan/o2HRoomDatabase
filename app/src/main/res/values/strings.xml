@@ -1,0 +1,5 @@
+<resources>
+    <string name="app_name">o2hRoomDemo</string>
+
+    <string name="logout_message">Are you sure you want to Logout?</string>
+</resources>
