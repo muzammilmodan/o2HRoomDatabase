@@ -10,13 +10,6 @@ import retrofit2.http.*
 
 interface MyApi {
 
-
-  /*  @POST(WebFields.LOGIN_PATH_PARAM)
-    suspend fun callExecuteLogin(
-        @Query(WebFields.REQUEST_EMAIL) email: String?, @Query(WebFields.REQUEST_PASSWORD) password: String?,
-        @Query(WebFields.REQUEST_DEVICE_ID) fcm_token: String?
-    ): Response<LoginResponse>
-*/
     companion object {
         operator fun invoke(
             networkConnectionInterceptor: NetworkConnectionInterceptor

@@ -10,22 +10,31 @@ import android.os.Bundle
 import android.os.Environment
 import android.util.Log
 import android.view.View
+import android.widget.Toast
+import androidx.activity.viewModels
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.databinding.DataBindingUtil
+import androidx.lifecycle.ViewModelProviders
 import androidx.recyclerview.widget.GridLayoutManager
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.example.o2hroomdemo.Model.UserDetails_RoomTable
+import com.example.o2hroomdemo.MyApplication
 import com.example.o2hroomdemo.R
 import com.example.o2hroomdemo.Utils.MyProgressDialog
 import com.example.o2hroomdemo.databinding.ActivityMainBinding
 import com.example.o2hroomdemo.ui.login.LoginActivity
+import com.example.o2hroomdemo.utils.ConnectivityDetector
+import com.example.o2hroomdemo.utils.Coroutines
 import com.example.o2hroomdemo.utils.SessionManager
 import com.google.firebase.auth.ktx.auth
 import com.google.firebase.ktx.Firebase
 import org.json.JSONArray
 import org.json.JSONException
+import org.kodein.di.KodeinAware
+import org.kodein.di.android.kodein
+import org.kodein.di.generic.instance
 import java.io.*
 import java.net.URL
 import java.text.SimpleDateFormat
@@ -33,14 +42,23 @@ import java.util.*
 import kotlin.collections.ArrayList
 
 
-class MainActivity : AppCompatActivity() {
+class MainActivity : AppCompatActivity(), KodeinAware {
 
     lateinit var mContext: Context
 
     lateinit var bindingMain: ActivityMainBinding
-    private val viewItems: ArrayList<UserDetails_RoomTable> = ArrayList()
+    private var viewItems: ArrayList<UserDetails_RoomTable> = ArrayList()
 
     private val TAG = "MainActivity"
+
+    override val kodein by kodein()
+    private var loginViewModel: MainViewModel? = null
+    private val factory: MainViewModelFactory by instance()
+
+    private val wordViewModel: MainViewModel by viewModels {
+        MainViewModelFactory((application as MyApplication).repository)
+    }
+
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -50,7 +68,29 @@ class MainActivity : AppCompatActivity() {
 
         bindingMain.tvNameAM.setText(SessionManager.getUserName(mContext))
 
-        addItemsFromJSON()
+        try {
+            //database = AppDatabase.getDatabase(application)
+            loginViewModel =
+                ViewModelProviders.of(this, factory).get(MainViewModel::class.java)
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+
+
+        if (ConnectivityDetector.isConnectingToInternet(mContext)) {
+            //Internet connection available
+            addItemsFromJSON()
+        } else {
+            //Internet connection not available
+            try {
+                Coroutines.io {
+                    viewItems = wordViewModel.getTaskListData()
+                }
+            } catch (e: Exception) {
+            }
+        }
+
+
         setGalleryData()
     }
 
@@ -79,6 +119,13 @@ class MainActivity : AppCompatActivity() {
                 viewItems.add(holidays)
 
                 DownloadImage(mContext).execute(profile)
+
+                try {
+                    Coroutines.io {
+                        wordViewModel.insert(profile_id, profile)
+                    }
+                } catch (e: Exception) {
+                }
             }
         } catch (e: JSONException) {
             Log.d(TAG, "addItemsFromJSON: ", e)
@@ -97,7 +144,7 @@ class MainActivity : AppCompatActivity() {
 
 
         protected override fun onPreExecute() {
-            pDialog =  ProgressDialog(mContext)
+            pDialog = ProgressDialog(mContext)
             pDialog.setCancelable(false)
             pDialog.setTitle("Please wait...")
             pDialog.show()
@@ -119,7 +166,7 @@ class MainActivity : AppCompatActivity() {
 
         override fun onPostExecute(result: Bitmap?) {
             saveImage(mContext, result!!, imageName)
-            if( null != pDialog)
+            if (null != pDialog)
                 pDialog.dismiss();
         }
 
@@ -145,7 +192,10 @@ class MainActivity : AppCompatActivity() {
                 wallpaperDirectory.mkdirs()
             }
 
-            val file = File(File(Environment.getExternalStorageDirectory().toString() + dirName), fileImageName)
+            val file = File(
+                File(Environment.getExternalStorageDirectory().toString() + dirName),
+                fileImageName
+            )
             if (file.exists()) {
                 file.delete()
             }
